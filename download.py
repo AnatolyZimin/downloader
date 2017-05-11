@@ -3,6 +3,7 @@ import logging
 import os
 
 from concurrent import futures
+from typing import Set
 from urllib.parse import urlsplit
 
 import requests
@@ -16,23 +17,30 @@ class Downloader:
         self,
         save_path,
         session=requests.Session(),
-        pool=futures.ThreadPoolExecutor(max_workers=5),
+        max_workers=5,
+        chunk_size=10 * 1024,
     ):
         self.save_path = save_path
         self.session = session
-        self.pool = pool
-        self.tasks = set()
+        self.pool = futures.ThreadPoolExecutor(max_workers=max_workers)
+        self.chunk_size = chunk_size
+        self.tasks = set()  # type: Set[futures.Future]
+        self._is_cancelled = False
 
     def download(self, url, filename=None, stream=True, **kwargs):
         filename = filename or self.make_filename(url)
         filename = os.path.join(self.save_path, filename)
 
         logger.info(
-            'started downloading: %(url)s => %(file)s',
+            'download started: %(url)s => %(file)s',
             {'url': url, 'file': filename},
         )
 
-        response = self.session.get(url, stream=stream, **kwargs)
+        try:
+            response = self.session.get(url, stream=stream, **kwargs)
+        except Exception:
+            logger.exception('download error')
+            return
 
         if response.status_code != 200:
             logger.error(
@@ -42,16 +50,20 @@ class Downloader:
             )
             return
 
-        # mimetypes module can be used to detect necessary file extension
+        # mimetypes module can be used to detect file extensions
         # based on value of Content-Type header
 
         with open(filename, 'wb') as file:
-            # use `chunk_size=None` to automatically set chunk size
-            for chunk in response.iter_content(chunk_size=None):
+            for chunk in response.iter_content(chunk_size=self.chunk_size):
+
+                if self._is_cancelled:
+                    logger.warning('download cancelled: %(url)s', {'url': url})
+                    return
+
                 file.write(chunk)
 
         logger.info(
-            'downloading completed: %(file)s',
+            'download completed: %(file)s',
             {'file': filename},
         )
 
@@ -64,10 +76,18 @@ class Downloader:
             **kwargs
         )
         self.tasks.add(task)
-        task.add_done_callback(self.tasks.remove)
+        task.add_done_callback(self.tasks.discard)
 
     def wait(self):
         futures.wait(self.tasks)
+
+    def cancel(self):
+        for task in self.tasks:
+            task.cancel()
+        self._is_cancelled = True
+
+    def shutdown(self, wait=True):
+        self.pool.shutdown(wait=wait)
 
     @staticmethod
     def make_filename(url: str) -> str:
@@ -85,7 +105,13 @@ class Downloader:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.wait()
+        try:
+            self.wait()
+        except:
+            self.cancel()
+            raise
+        finally:
+            self.shutdown()
 
 
 def main(*urls, **options):
@@ -96,8 +122,12 @@ def main(*urls, **options):
         datefmt='%Y-%m-%d %H:%M:%S',
     )
 
-    with Downloader(save_path='.') as downloader:
-        downloader.enqueue('https://avatars1.githubusercontent.com/u/3508656')
+    try:
+        with Downloader(save_path='.') as downloader:
+            # downloader.enqueue('https://avatars1.githubusercontent.com/u/3508656')
+            downloader.enqueue('http://download.jetbrains.com/python/pycharm-professional-2016.3.3.dmg')
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == '__main__':
