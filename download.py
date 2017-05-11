@@ -42,6 +42,9 @@ class Downloader:
             )
             return
 
+        # mimetypes module can be used to detect necessary file extension
+        # based on value of Content-Type header
+
         with open(filename, 'wb') as file:
             # use `chunk_size=None` to automatically set chunk size
             for chunk in response.iter_content(chunk_size=None):
