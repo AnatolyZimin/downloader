@@ -127,10 +127,6 @@ def main(*urls, log_level='INFO', **options):
         datefmt='%Y-%m-%d %H:%M:%S',
     )
 
-    if not urls:
-        logger.warning('provided empty list of URLs')
-        return
-
     try:
         with Downloader(**options) as downloader:
             for url in urls:
@@ -140,13 +136,18 @@ def main(*urls, log_level='INFO', **options):
 
 
 if __name__ == '__main__':
-    args_parser = argparse.ArgumentParser(argument_default=argparse.SUPPRESS)
-    args_parser.add_argument('-w', '--workers', type=int, dest='max_workers', default=5)
-    args_parser.add_argument('-s', '--chunk-size', type=int, default=10 * 1024)
-    args_parser.add_argument('-p', '--save-path', default='.')
-    args_parser.add_argument('-l', '--log-level', choices=logging._nameToLevel, default='INFO')
-    args_parser.add_argument('urls', nargs=argparse.REMAINDER)
+    args_parser = argparse.ArgumentParser(description='files download utility')
+    args_parser.add_argument('-w', '--workers', type=int, dest='max_workers',
+                             default=5, help='max number of workers to use')
+    args_parser.add_argument('-s', '--chunk-size', type=int, default=10 * 1024,
+                             help='using size of chunks')
+    args_parser.add_argument('-p', '--save-path', default='.',
+                             help='path to directory where to save files')
+    args_parser.add_argument('-l', '--log-level', choices=logging._nameToLevel,
+                             default='INFO', help='logging level')
+    args_parser.add_argument('url', nargs='+', help='URL to download')
+
     parsed_args = vars(args_parser.parse_args(sys.argv[1:]))
-    urls = parsed_args.pop('urls')
+    urls = parsed_args.pop('url')
 
     main(*urls, **parsed_args)
