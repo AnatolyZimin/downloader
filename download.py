@@ -68,6 +68,9 @@ class Downloader:
         )
 
     def enqueue(self, url, filename=None, stream=True, **kwargs):
+        if self._is_cancelled:
+            raise RuntimeError('Downloader was cancelled')
+
         task = self.pool.submit(
             self.download,
             url,
