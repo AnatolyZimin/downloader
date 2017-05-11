@@ -1,6 +1,9 @@
+#!/usr/bin/env python
+import argparse
 import hashlib
 import logging
 import os
+import sys
 
 from concurrent import futures
 from typing import Set
@@ -15,7 +18,7 @@ class Downloader:
 
     def __init__(
         self,
-        save_path,
+        save_path='',
         session=requests.Session(),
         max_workers=5,
         chunk_size=10 * 1024,
@@ -117,21 +120,33 @@ class Downloader:
             self.shutdown()
 
 
-def main(*urls, **options):
+def main(*urls, log_level='INFO', **options):
     logging.basicConfig(
-        # level=self.get_logger_level(options.get('verbosity')),
-        level=logging.INFO,
-        format='%(asctime)s (%(name)s) [%(levelname)s] %(message)s',
+        level=getattr(logging, log_level),
+        format='%(asctime)s [%(levelname)s] %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S',
     )
 
+    if not urls:
+        logger.warning('provided empty list of URLs')
+        return
+
     try:
-        with Downloader(save_path='.') as downloader:
-            # downloader.enqueue('https://avatars1.githubusercontent.com/u/3508656')
-            downloader.enqueue('http://download.jetbrains.com/python/pycharm-professional-2016.3.3.dmg')
+        with Downloader(**options) as downloader:
+            for url in urls:
+                downloader.enqueue(url)
     except KeyboardInterrupt:
         pass
 
 
 if __name__ == '__main__':
-    main()
+    args_parser = argparse.ArgumentParser(argument_default=argparse.SUPPRESS)
+    args_parser.add_argument('-w', '--workers', type=int, dest='max_workers', default=5)
+    args_parser.add_argument('-s', '--chunk-size', type=int, default=10 * 1024)
+    args_parser.add_argument('-p', '--save-path', default='.')
+    args_parser.add_argument('-l', '--log-level', choices=logging._nameToLevel, default='INFO')
+    args_parser.add_argument('urls', nargs=argparse.REMAINDER)
+    parsed_args = vars(args_parser.parse_args(sys.argv[1:]))
+    urls = parsed_args.pop('urls')
+
+    main(*urls, **parsed_args)
