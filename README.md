@@ -2,6 +2,14 @@
 
 Just small utility to download files.
 
+## Requirements
+
+* Python 3.6+
+
+## How to install dependencies
+
+    pip install -r requirements.txt
+
 ## How to use
 
     python downloader.py --help
